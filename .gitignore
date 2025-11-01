@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environnements virtuels
+venv/
+.env
+
+# Firebase credentials
+config/serviceAccountKey.json
+
+# Logs et caches
+*.log
+.cache/
+
+# Fichiers de données locaux
+data/
+scripts/
