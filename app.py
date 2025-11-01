@@ -1,18 +1,41 @@
 ﻿from flask import Flask, request, jsonify
 from datetime import datetime
-import random
+import random, re, os, json
 from html import escape as html_escape
-import re
-import base64
-from io import BytesIO
 from PIL import Image
+from io import BytesIO
 import firebase_admin
 from firebase_admin import credentials, db
-import os, json
 
+# ---------------------------------------------------------------------
+# 🔧 1. Création automatique de la clé Firebase AVANT toute initialisation
+# ---------------------------------------------------------------------
+if os.getenv("FIREBASE_KEY_JSON"):
+    try:
+        key_content = json.loads(os.getenv("FIREBASE_KEY_JSON"))
+        os.makedirs("config", exist_ok=True)
+        with open("config/serviceAccountKey.json", "w") as f:
+            json.dump(key_content, f)
+        print("✅ serviceAccountKey.json recréé avec succès !")
+    except Exception as e:
+        print("⚠️ Erreur lors de la création du fichier Firebase :", e)
+else:
+    print("⚠️ Variable FIREBASE_KEY_JSON non trouvée dans Render !")
+
+# ---------------------------------------------------------------------
+# 🔥 2. Initialisation Firebase
+# ---------------------------------------------------------------------
+SERVICE_KEY_PATH = "config/serviceAccountKey.json"
+DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "https://android-92c2b-default-rtdb.firebaseio.com")
+
+cred = credentials.Certificate(SERVICE_KEY_PATH)
+firebase_admin.initialize_app(cred, {"databaseURL": DATABASE_URL})
+
+# ---------------------------------------------------------------------
+# 🚀 3. Application Flask
+# ---------------------------------------------------------------------
 app = Flask(__name__)
 
-# ✅ CORS (pour autoriser ton frontend)
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -20,27 +43,13 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS, PUT, DELETE"
     return response
 
-
-# ✅ Création automatique du fichier Firebase à partir de la variable Render
-if os.getenv("FIREBASE_KEY_JSON"):
-    key_content = json.loads(os.getenv("FIREBASE_KEY_JSON"))
-    os.makedirs("config", exist_ok=True)
-    with open("config/serviceAccountKey.json", "w") as f:
-        json.dump(key_content, f)
-
-# ✅ Initialisation Firebase
-SERVICE_KEY_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/serviceAccountKey.json")
-DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "https://android-92c2b-default-rtdb.firebaseio.com")
-
-cred = credentials.Certificate(SERVICE_KEY_PATH)
-firebase_admin.initialize_app(cred, {"databaseURL": DATABASE_URL})
-
 # Données dynamiques
 DEFAULT_CELEBRANT = os.getenv("CELEBRANT", "Junior")
-
-# NOUVEAU: Stockage des photos en base64 (pour la démo)
 UPLOADED_PHOTOS = []
 
+# ---------------------------------------------------------------------
+# Fonctions utilitaires (inchangées)
+# ---------------------------------------------------------------------
 def build_anecdotes(celebrant: str):
     return [
         f"{celebrant} a déjà compilé un gâteau en .exe",
@@ -50,7 +59,6 @@ def build_anecdotes(celebrant: str):
         f"Le café préféré de {celebrant} : Binary Brew"
     ]
 
-
 def build_quiz(celebrant: str):
     return [
         {"question": f"Langage préféré de {celebrant} ? (a) PHP (b) Python (c) JS", "answer": "b"},
@@ -58,8 +66,6 @@ def build_quiz(celebrant: str):
         {"question": f"Année de naissance de {celebrant} ? (a) 1990 (b) 1995 (c) 2000", "answer": "b"},
     ]
 
-
-# Fonctions utilitaires RTDB
 def get_user_by_name(name: str):
     ref = db.reference("users")
     snap = ref.order_by_child("name").equal_to(name).get()
@@ -69,37 +75,26 @@ def get_user_by_name(name: str):
         return user_id, user_data
     return None, None
 
-
 def create_user(name: str):
     ref = db.reference("users")
-    new_ref = ref.push(
-        {
-            "name": name,
-            "step": "quiz_q1",
-            "score": 0,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-    )
+    new_ref = ref.push({
+        "name": name,
+        "step": "quiz_q1",
+        "score": 0,
+        "created_at": datetime.utcnow().isoformat(),
+    })
     return new_ref.key
-
 
 def update_user(user_id: str, data: dict):
     ref = db.reference(f"users/{user_id}")
     ref.update(data)
-
-
-# Validation
-def validate_name(name: str) -> bool:
-    if not name or len(name) > 40:
-        return False
-    return bool(re.match(r'^[a-zA-ZÀ-ÿ\s\-\.]{1,40}$', name))
-
 
 def sanitize_text(s: str, max_len: int = 300) -> str:
     s = (s or "").strip()
     if len(s) > max_len:
         s = s[:max_len]
     return html_escape(s, quote=False)
+
 
 
 # ---------- Wishes ----------
