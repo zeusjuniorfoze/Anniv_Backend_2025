@@ -1,20 +1,18 @@
 ﻿from flask import Flask, request, jsonify
 from datetime import datetime
-import os
 import random
 from html import escape as html_escape
 import re
 import base64
 from io import BytesIO
 from PIL import Image
-
 import firebase_admin
 from firebase_admin import credentials, db
-
+import os, json
 
 app = Flask(__name__)
 
-# CORS
+# ✅ CORS (pour autoriser ton frontend)
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -23,13 +21,19 @@ def add_cors_headers(response):
     return response
 
 
-# Initialisation Firebase
+# ✅ Création automatique du fichier Firebase à partir de la variable Render
+if os.getenv("FIREBASE_KEY_JSON"):
+    key_content = json.loads(os.getenv("FIREBASE_KEY_JSON"))
+    os.makedirs("config", exist_ok=True)
+    with open("config/serviceAccountKey.json", "w") as f:
+        json.dump(key_content, f)
+
+# ✅ Initialisation Firebase
 SERVICE_KEY_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/serviceAccountKey.json")
 DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "https://android-92c2b-default-rtdb.firebaseio.com")
 
 cred = credentials.Certificate(SERVICE_KEY_PATH)
 firebase_admin.initialize_app(cred, {"databaseURL": DATABASE_URL})
-
 
 # Données dynamiques
 DEFAULT_CELEBRANT = os.getenv("CELEBRANT", "Junior")
